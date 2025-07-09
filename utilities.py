@@ -4,6 +4,8 @@ from itertools import cycle
 import numpy as np
 import matplotlib.pyplot as plt
 from pathlib import Path
+import torch
+from torch import nn
 
 def roc_plot_rf(y_pred, y_true, association=False):
     # Plot linewidth.

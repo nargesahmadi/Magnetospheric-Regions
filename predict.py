@@ -1,4 +1,6 @@
 import os
+import torch
+from torch import nn
 # path for data 
 os.environ["SPEDAS_DATA_DIR"] = "/Volumes/datadir/mmsdata" #"/Users/naah5403/data"
 
@@ -126,7 +128,7 @@ def predictions(model:torch.nn.Module,
 	batch_size = 8
 	
 	y_preds = []
-	loaded_model.eval()
+	model.eval()
 	
 	
 	with torch.inference_mode():
@@ -135,7 +137,7 @@ def predictions(model:torch.nn.Module,
 	        batch_X1 = X1_tensor_test[i:i+batch_size]
 	        batch_X2 = X2_tensor_test[i:i+batch_size]
 	        
-	        y_logit = loaded_model(batch_X1, batch_X2)
+	        y_logit = model(batch_X1, batch_X2)
 	        arr = torch.softmax(y_logit, dim=1)
 	        y_pred = torch.softmax(y_logit, dim=1).argmax(dim=1) 
 	
