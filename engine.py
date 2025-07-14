@@ -2,10 +2,94 @@ import torch
 from torch import nn
 from torchmetrics import Accuracy
 
-criterion = nn.CrossEntropyLoss()
-optimizer = torch.optim.Adam(model.parameters(), lr=0.001) #changed from 0.001
 # setup metric and make sure it's on target device
 acc_fn = Accuracy(task="multiclass", num_classes=6)
+
+
+def train_step(model: nn.Module,
+               data_loader: torch.utils.data.DataLoader,
+               loss_fn: torch.nn.Module,
+               optimizer: torch.optim.Optimizer,
+               accuracy_fn,
+               device: torch.device = device):
+    """Performs a training with model traying to learn on data_loader"""
+    
+    train_loss, train_acc = 0, 0
+    model.to(device)
+    
+    # Put model into training mode
+    model.train()
+    
+    # Add a loop to loop through training batches
+    for batch, (X1, X2, y) in enumerate(data_loader):
+        
+        # X1, X2, y = batch  # X1 from dataset1, X2 from dataset2, y as labels
+        
+        # Put data on target device
+        X1, X2, y = X1.to(device), X2.to(device), y.to(device)
+        # print(X1.shape)
+        # print(X2.shape)        
+        # Transpose input to (batch_size, num_features, sequence_length)
+        # X = X.transpose(1, 2)
+
+        # 1. forward pass
+        y_pred = model(X1, X2)
+        # print('ypred=', y_pred)
+        # 2. Calculate loss and accuracy (per patch)
+        loss = loss_fn(y_pred, y)
+        # print('loss =', loss)
+        train_loss += loss # accumulate train loss
+        train_acc += acc_fn(y_pred.argmax(dim=1), y) # (preds need to be same as y_true) going from logits -> y labels
+        
+        # 3. optimizer zero grad
+        optimizer.zero_grad()
+
+        # 4. loss backward
+        loss.backward()
+
+        # 5. optimizer step
+        optimizer.step()
+
+
+    # Divide total train loss and total accuracy by length of train dataloader
+    train_loss /= len(data_loader)
+    train_acc /= len(data_loader)
+    print(f"Train loss: {train_loss:.5f} | Train acc: {train_acc*100:.2f}%")
+    return train_loss, train_acc
+    
+def test_step(model: nn.Module,
+             data_loader: torch.utils.data.DataLoader,
+             loss_fn: torch.nn.Module,
+             accuracy_fn,
+             device: torch.device = device):
+
+    test_loss, test_acc = 0, 0
+    model.to(device)
+
+    # Put model into evaluation mode
+    model.eval()
+
+    with torch.inference_mode():
+        
+        for batch, (X1, X2, y) in enumerate(data_loader):
+            
+            # X1, X2, y = batch  # X1 from dataset1, X2 from dataset2, y as labels
+            # Put data on target device
+            X1, X2, y = X1.to(device), X2.to(device), y.to(device)
+            # Transpose input to (batch_size, num_features, sequence_length)
+            # X = X.transpose(1, 2)
+            test_pred = model(X1, X2)
+            # print(test_pred)
+            test_loss += loss_fn(test_pred, y)
+            test_acc += acc_fn(test_pred.argmax(dim=1), y)
+            # print(test_pred.argmax(dim=1))
+            # print(y)
+        # test loss and accuracy average per batch
+        test_loss /= len(data_loader)
+        test_acc /= len(data_loader)
+        print(f"\nTest loss: {test_loss:.4f}, Test acc: {test_acc*100:.2f}%\n")
+        return test_loss, test_acc
+
 
 def train(model: torch.nn.Module, 
           train_dataloader: torch.utils.data.DataLoader, 
@@ -35,75 +119,47 @@ def train(model: torch.nn.Module,
     A dictionary of training and testing loss as well as training and
     testing accuracy metrics. Each metric has a value in a list for 
     each epoch.
-    In the form: {epochs: [...],
+    In the form: {epoch: [...],
 				  train_loss: [...],
                   train_acc: [...],
                   test_loss: [...],
                   test_acc: [...]} 
   """
-	results = {"epochs": [],
-	           "train_loss": [],
-	           "train_acc": [],
-	           "test_loss": [],
-	           "test_acc": []}
-	
-	# Training loop
-	num_epochs = 20
-	batch_size = 8
-	num_samples = len(X1_train)
-	for epoch in range(num_epochs):
-	    train_loss, train_acc = 0, 0
-	    # print(epoch)
-	    for i in range(0, num_samples-1, batch_size):
-	        batch_X1 = X1_train[i:i+batch_size]
-	        batch_X2 = X2_train[i:i+batch_size]
-	        batch_y = y_train[i:i+batch_size]
-	
-	        outputs = model(batch_X1, batch_X2)
-	
-	        loss = criterion(outputs, batch_y)
-	        train_loss += loss
-	        train_acc += acc_fn(outputs.argmax(dim=1), batch_y)
-	        # print(f"Epoch [{epoch+1}/{num_epochs}], Loss: {train_loss.item():.4f}, acc: {train_acc.item()*100:.2f}")
-	        optimizer.zero_grad()
-	        loss.backward()
-	        optimizer.step()
-	    
-	    train_loss /= (len(X1_train)/batch_size)
-	    train_acc /= (len(X1_train)/batch_size)
-	    print(f"Epoch [{epoch+1}/{num_epochs}]: Train Loss: {train_loss.item():.4f}: Train acc: {train_acc.item()*100:.2f}%")
-	    results["epochs"].append(epoch)
-	    results["train_loss"].append(train_loss.item() if isinstance(train_loss, torch.Tensor) else train_loss)
-	    results["train_acc"].append(train_acc.item() if isinstance(train_acc, torch.Tensor) else train_acc)
-	
-	
-	    test_loss, test_acc = 0, 0
-	    # Put model into evaluation mode
-	    model.eval()
-	
-	    with torch.inference_mode():
-	        for i in range(0, len(X1_test), batch_size):
-	            batch_X1 = X1_test[i:i+batch_size]
-	            batch_X2 = X2_test[i:i+batch_size]
-	            batch_y = y_test[i:i+batch_size]
-	            # print(batch_y)
-	
-	            test_pred = model(batch_X1, batch_X2)
-	            # print(test_pred.argmax(dim=1))
-	            test_loss += criterion(test_pred , batch_y)
-	            test_acc += acc_fn(test_pred.argmax(dim=1), batch_y)
-	
-	        # test loss and accuracy average per batch
-	        test_loss /= (len(X1_test)/batch_size)
-	        test_acc /= (len(X1_test)/batch_size)
-	        print(f"\nEpoch [{epoch+1}/{num_epochs}]: Test loss: {test_loss:.4f}: Test acc: {test_acc*100:.2f}%\n")
-	        results["test_loss"].append(test_loss.item() if isinstance(test_loss, torch.Tensor) else test_loss)
-	        results["test_acc"].append(test_acc.item() if isinstance(test_acc, torch.Tensor) else test_acc)
-	
-	        # if test_acc > 0.98:  # Condition to exit loop
-	        if test_loss < 0.05:  # Condition to exit loop
-	            print("Stopping early: Accuracy exceeded threshold!")
-	            break  # Exiting the loop
-	print("Training complete!")
-	  # Return the filled results at the end of the epochs
-    return results
+  # Create empty results dictionary
+  results = {"epoch": [],
+	  "train_loss": [],
+      "train_acc": [],
+      "test_loss": [],
+      "test_acc": []
+  }
+
+  # Loop through training and testing steps for a number of epochs
+  for epoch in tqdm(range(epochs)):
+      train_loss, train_acc = train_step(model=model,
+                                          dataloader=train_dataloader,
+                                          loss_fn=loss_fn,
+                                          optimizer=optimizer,
+                                          device=device)
+      test_loss, test_acc = test_step(model=model,
+          dataloader=test_dataloader,
+          loss_fn=loss_fn,
+          device=device)
+
+      # Print out what's happening
+      print(
+          f"Epoch: {epoch+1} | "
+          f"train_loss: {train_loss:.4f} | "
+          f"train_acc: {train_acc:.4f} | "
+          f"test_loss: {test_loss:.4f} | "
+          f"test_acc: {test_acc:.4f}"
+      )
+
+      # Update results dictionary
+      results["epoch"].append(epoch)
+      results["train_loss"].append(train_loss)
+      results["train_acc"].append(train_acc)
+      results["test_loss"].append(test_loss)
+      results["test_acc"].append(test_acc)
+
+  # Return the filled results at the end of the epochs
+  return results

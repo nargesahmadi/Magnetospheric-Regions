@@ -92,4 +92,19 @@ def creating_data():
 	X1_train = X1_train.unsqueeze(dim=1)
 	X1_test = X1_test.unsqueeze(dim=1)
 
-	return X1_train, X2_train, y_train, X1_test, X2_test, y_test
+	from torch.utils.data import DataLoader, TensorDataset
+
+	assert len(X1_train) == len(X2_train) == len(y_train), "Train Datasets must have the same length"
+	assert len(X1_test) == len(X2_test) == len(y_test), "Test Datasets must have the same length"
+
+	train_dataset = TensorDataset(X1_train, X2_train, y_train)
+	test_dataset = TensorDataset(X1_test, X2_test, y_test)
+
+	# Create a DataLoader
+	batch_size = 8
+	train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+	test_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
+
+	train_dataloader , test_dataloader
+	
+	return train_dataloader, test_dataloader, class_names
