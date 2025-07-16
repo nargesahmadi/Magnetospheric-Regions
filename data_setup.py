@@ -23,7 +23,7 @@ def min_max_scaling(tensor, feature_range=(0, 1)):
   return scaled_tensor
 
 
-def creating_data():
+def creating_data(batch_size: int):
 	"""Creates training and testing Datasets, will change to dataloaders.
 
   Reads the h5 file containing data and creates training and testing datasets
@@ -35,6 +35,9 @@ def creating_data():
   Returns:
     X1_train, X2_train, X1_test, X2_test, y_train, y_test
   """
+
+	batch_size = 8
+	
 	with h5py.File('training_data.h5', 'r') as f:
 	    flux = f['flux'][:]
 	    params = f['parameters'][:]
@@ -101,7 +104,7 @@ def creating_data():
 	test_dataset = TensorDataset(X1_test, X2_test, y_test)
 
 	# Create a DataLoader
-	batch_size = 8
+	
 	train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
 	test_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
 

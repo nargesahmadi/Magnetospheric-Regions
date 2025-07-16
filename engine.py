@@ -1,6 +1,7 @@
 import torch
 from torch import nn
 from torchmetrics import Accuracy
+from tqdm.auto import tqdm
 
 # setup metric and make sure it's on target device
 acc_fn = Accuracy(task="multiclass", num_classes=6)
@@ -11,7 +12,7 @@ def train_step(model: nn.Module,
                loss_fn: torch.nn.Module,
                optimizer: torch.optim.Optimizer,
                accuracy_fn,
-               device: torch.device = device):
+               device: torch.device):
     """Performs a training with model traying to learn on data_loader"""
     
     train_loss, train_acc = 0, 0
@@ -61,7 +62,7 @@ def test_step(model: nn.Module,
              data_loader: torch.utils.data.DataLoader,
              loss_fn: torch.nn.Module,
              accuracy_fn,
-             device: torch.device = device):
+             device: torch.device):
 
     test_loss, test_acc = 0, 0
     model.to(device)
@@ -97,7 +98,7 @@ def train(model: torch.nn.Module,
           optimizer: torch.optim.Optimizer,
           loss_fn: torch.nn.Module,
           epochs: int,
-          device: torch.device) -> Dict[str, List]:
+          device: torch.device) -> dict[str, list]:
   """Trains and tests a PyTorch model.
 
   Passes a target PyTorch models through train_step() and test_step()
@@ -136,13 +137,15 @@ def train(model: torch.nn.Module,
   # Loop through training and testing steps for a number of epochs
   for epoch in tqdm(range(epochs)):
       train_loss, train_acc = train_step(model=model,
-                                          dataloader=train_dataloader,
+                                          data_loader=train_dataloader,
                                           loss_fn=loss_fn,
                                           optimizer=optimizer,
+										  accuracy_fn=acc_fn,
                                           device=device)
       test_loss, test_acc = test_step(model=model,
-          dataloader=test_dataloader,
+          data_loader=test_dataloader,
           loss_fn=loss_fn,
+		  accuracy_fn=acc_fn,
           device=device)
 
       # Print out what's happening

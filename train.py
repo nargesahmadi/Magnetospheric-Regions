@@ -13,7 +13,7 @@ LEARNING_RATE = 0.001
 
 
 # Create train/test dataloader and get class names as a list
-train_dataloader, test_dataloader, class_names = data_setup.creating_data()
+train_dataloader, test_dataloader, class_names = data_setup.creating_data(batch_size = BATCH_SIZE)
 
 # Setup target device
 device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -35,7 +35,7 @@ engine.train(model=model,
              epochs=NUM_EPOCHS,
              device=device)
 
-from . import utilities
+import utilities
 
 # Save the model with help from utils.py
 utilities.save_model(model=model,
