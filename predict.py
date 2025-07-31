@@ -288,7 +288,11 @@ def predictions_cnn_rf(cnn_model:torch.nn.Module, rf_model, trange):
     
     
     for i in range(0,PARAM_SIZE):
-        X2_tensor_test[:,:,i] = (X2_tensor_test[:,:,i] - min_vals_X2[i]) / ( max_vals_X2[i] - min_vals_X2[i])
+        if i ==2 :
+            X2_tensor_test[:,:,i] = (X2_tensor_test[:,:,i] - min_vals_X2[i]) / ( max_vals_X2[i] - min_vals_X2[i])
+            X2_tensor_test[:,:,i] = X2_tensor_test[:,:,i]*2.0 - 1.0
+        else:
+            X2_tensor_test[:,:,i] = (X2_tensor_test[:,:,i] - min_vals_X2[i]) / ( max_vals_X2[i] - min_vals_X2[i])
     
     
     # change to color, height, width, torch format
@@ -339,11 +343,22 @@ def predictions_cnn_rf(cnn_model:torch.nn.Module, rf_model, trange):
 
     # Fuse probablities (e.g., by averaging)
     
-    combined_output= (y_pred_cnn_tensor.numpy() + rf_output) / 2
+    combined_output= (y_pred_cnn_tensor.numpy() + rf_output ) / 2
     y_pred_numpy = np.argmax(combined_output, axis=1)
+
+    # Find indexes where x > 0 and label is 4 or 5, replace with 3
+    indices_day = np.where((X2_test_avg[:,2] > 0) & ((y_pred_numpy == 4) | (y_pred_numpy == 5)))[0]
+    y_pred_numpy[indices_day] = 3   
+
+    # # Find indexes where x < 0 and label is 3, replace with 4
+    # indices_tail = np.where((X2_test_avg[:,2] < 0) & (y_pred_numpy == 3) )[0]
+    # y_pred_numpy[indices_tail] = 4   
+
     
     y_pred_tensor = torch.Tensor(y_pred_numpy)
-    
+    # print(y_pred_tensor)
+    # print(X2_test_avg[:,2])
+
     
     y_pred_tensor = pd.DataFrame(y_pred_tensor)
     y_pred_tensor = y_pred_tensor.set_index(index)
@@ -385,5 +400,5 @@ def predictions_cnn_rf(cnn_model:torch.nn.Module, rf_model, trange):
     # axis[3].grid()
     # axis[3].set_ylabel('CNN Predictions')
     
-    # plt.savefig("FigCase_"+tname+".png")
+    plt.savefig("CNN_RF_Case_"+tname+".png")
     plt.show()
