@@ -103,18 +103,18 @@ def plot_loss_curves(results):
 
     # Plot loss
     plt.subplot(1, 2, 1)
-    plt.plot(epochs, loss, label='train_loss')
-    plt.plot(epochs, test_loss, label='test_loss')
-    plt.title('Loss')
-    plt.xlabel('Epochs')
+    plt.plot(epochs, loss, label='Train Loss', fontsize=20)
+    plt.plot(epochs, test_loss, label='Validation Loss', fontsize=20)
+    plt.title('Loss', fontsize=20)
+    plt.xlabel('Steps', fontsize=20)
     plt.legend()
 
     # Plot accuracy
     plt.subplot(1, 2, 2)
-    plt.plot(epochs, accuracy, label='train_accuracy')
-    plt.plot(epochs, test_accuracy, label='test_accuracy')
-    plt.title('Accuracy')
-    plt.xlabel('Epochs')
+    plt.plot(epochs, accuracy, label='Train Accuracy', fontsize=20)
+    plt.plot(epochs, test_accuracy, label='Validation Accuracy', fontsize=20)
+    plt.title('Accuracy', fontsize=20)
+    plt.xlabel('Steps', fontsize=20)
     plt.legend();
     plt.savefig('LossAccuracy.png')
     plt.show()
