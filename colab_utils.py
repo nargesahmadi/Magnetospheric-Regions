@@ -38,7 +38,7 @@ class FluxCNNModel(nn.Module):
         )
         self.fc1 = nn.Linear(64 * 5 * 4, 64)  # Flattened size for input image size (1, 40, 32)
         self.dropout = nn.Dropout(p=0.5) # to avoid overfitting
-        self.output = nn.Linear(64, 6)
+        self.output = nn.Linear(64, 5)
 
     def forward(self, x1):
         x1 = self.conv2d_1(x1)
@@ -48,8 +48,7 @@ class FluxCNNModel(nn.Module):
         x1 = self.fc1(x1)
         x = self.output(x1)
         return x
-
-
+            
 
 def predictions_cnn_rf(cnn_model:torch.nn.Module, rf_model, trange):
 
@@ -125,40 +124,73 @@ def predictions_cnn_rf(cnn_model:torch.nn.Module, rf_model, trange):
     X2 = np.concatenate((X2_1, X2_2), axis=2)
     
     import torch
-    X1_tensor_test = torch.from_numpy(np.array(X1)).type(torch.float) # float is float32
+    X1_tensor_test = torch.log10(torch.from_numpy(np.array(X1)).type(torch.float)+1.0) # float is float32
     X2_tensor_test = torch.from_numpy(np.array(X2)).type(torch.float) # float is float32
     
     nan_mask = torch.isnan(X2_tensor_test)
     num_nan = torch.sum(nan_mask).item()
-    print("Number of NaNs:", num_nan)
+    #print("Number of NaNs:", num_nan)
     
     # Replace NaN values with 0
     X2_tensor_test = torch.nan_to_num(X2_tensor_test, nan=0.0)
     
+
     min_vals_X1 = torch.tensor(0.)
-    max_vals_X1 = torch.tensor(1.5701e+08)
-    min_vals_X2 = torch.tensor([0.6576, 19.5559, -23.5244])
-    max_vals_X2 = torch.tensor([85.0814, 9750.4180, 16.6774])
+    max_vals_X1 = torch.tensor(8.0543)
+    min_vals_X2 = torch.tensor([0.3847, 45.2129, -24.1444])
+    max_vals_X2 = torch.tensor([85.2243, 10612.0547,    12.7759])
+
     PARAM_SIZE = 3
     
     X1_tensor_test = (X1_tensor_test - min_vals_X1) / ( max_vals_X1 - min_vals_X1)
+    print('x1 shape : ', X1_tensor_test.shape)
+          
+    def normalize_preserve_zero(tensor, min_val=None, max_val=None):
+        """
+        Normalize tensor to [-1, 1] while keeping zero at zero
+        Uses piecewise linear transformation based on min/max values
+        
+        Args:
+            tensor: Input tensor
+            min_val: Minimum value (computed if None)
+            max_val: Maximum value (computed if None)
+        
+        Returns:
+            normalized tensor, min_val, max_val
+        """
+        if min_val is None:
+            min_val = torch.min(tensor)
+        if max_val is None:
+            max_val = torch.max(tensor)
+        
+        # Get the absolute values of min and max for scaling
+        abs_min = torch.abs(min_val)
+        abs_max = torch.abs(max_val)
+        
+        # Initialize normalized tensor
+        normalized = torch.zeros_like(tensor)
+        
+        # For negative values: map [min_val, 0] to [-1, 0]
+        negative_mask = tensor < 0
+        normalized[negative_mask] = tensor[negative_mask] / abs_min
+        
+        # For positive values: map [0, max_val] to [0, 1]
+        positive_mask = tensor >= 0
+        normalized[positive_mask] = tensor[positive_mask] / abs_max
+        
+        return normalized
     
-    
-    for i in range(0,PARAM_SIZE):
-        if i ==2 :
-            X2_tensor_test[:,:,i] = (X2_tensor_test[:,:,i] - min_vals_X2[i]) / ( max_vals_X2[i] - min_vals_X2[i])
-            X2_tensor_test[:,:,i] = X2_tensor_test[:,:,i]*2.0 - 1.0
-        else:
-            X2_tensor_test[:,:,i] = (X2_tensor_test[:,:,i] - min_vals_X2[i]) / ( max_vals_X2[i] - min_vals_X2[i])
-    
-    
+    for i in range(0,PARAM_SIZE-1):
+        X2_tensor_test[:,:,i] = (X2_tensor_test[:,:,i] - min_vals_X2[i]) / ( max_vals_X2[i] - min_vals_X2[i])
+
+    X2_tensor_test[:,:,2] = normalize_preserve_zero(X2_tensor_test[:,:,2], min_vals_X2[2],max_vals_X2[2])
+
     # change to color, height, width, torch format
     X1_tensor_test = torch.permute(X1_tensor_test, (0, 2, 1))
-    X1_tensor_test.size()
     
     X2_tensor_test = torch.permute(X2_tensor_test, (0, 2, 1))
+
     X2_test_avg = np.array(X2_tensor_test.mean(axis=2))     # shape becomes (length, 3)
-    
     
     X1_tensor_test = X1_tensor_test.unsqueeze(dim=1)
     
@@ -177,14 +209,13 @@ def predictions_cnn_rf(cnn_model:torch.nn.Module, rf_model, trange):
             
             y_logit = cnn_model(batch_X1)
             y_cnn = torch.softmax(y_logit, dim=1)
-    
             y_pred_cnn.append(y_cnn)
-    
-    # # prediction from cnn model
+
+
+    # prediction from cnn model
     y_pred_cnn_tensor = torch.cat(y_pred_cnn)
-    # y_pred_cnn_tensor.shape
-    
-    
+
+
     # prediction from random forest
     rf_output = rf_model.predict_proba(X2_test_avg)
 
@@ -193,28 +224,23 @@ def predictions_cnn_rf(cnn_model:torch.nn.Module, rf_model, trange):
     y_cnn = pd.DataFrame(y_cnn)    
     y_cnn = y_cnn.set_index(index)
 
+
     # prediction from rf only
     y_rf = np.argmax(rf_output, axis=1)
     y_rf = pd.DataFrame(y_rf)    
     y_rf = y_rf.set_index(index)
 
-    # Fuse probablities (e.g., by averaging)
+    # Fuse probablities (by averaging)
     
     combined_output= (y_pred_cnn_tensor.numpy() + rf_output ) / 2
     y_pred_numpy = np.argmax(combined_output, axis=1)
 
-    # Find indexes where x > 0 and label is 4 or 5, replace with 2 PS or LOBE to MSP
-    indices_day = np.where((X2_test_avg[:,2] > 0) & ((y_pred_numpy == 4) | (y_pred_numpy == 5)))[0]
-    y_pred_numpy[indices_day] = 3   
-
-    # # Find indexes where x < 0 and label is 3, replace with 4
-    # indices_tail = np.where((X2_test_avg[:,2] < 0) & (y_pred_numpy == 3) )[0]
-    # y_pred_numpy[indices_tail] = 4   
-
     
     y_pred_tensor = torch.Tensor(y_pred_numpy)
-    # print(y_pred_tensor)
-    # print(X2_test_avg[:,2])
+    y_combined = y_pred_tensor
+    y_combined = pd.DataFrame(y_combined)
+    y_combined = y_combined.set_index(index)
+
 
     def replace_pair_values(tensor, pair_list, new_value):
         """
@@ -239,27 +265,36 @@ def predictions_cnn_rf(cnn_model:torch.nn.Module, rf_model, trange):
         return tensor
 
     # Sequentially apply the same groups as your original code:
-    # 1) (2<->3) -> 6  MSH <-> MSP  -> MP
-    replace_pair_values(y_pred_tensor, [(2,3)], 6)
+    # 1) (1<->2) -> 5  MSH <-> MSP  -> MP
+    replace_pair_values(y_pred_tensor, [(1,2)], 5)
     
-    # 2) (0<->2) or (1<->2) -> 7  SW <-> MSH -> BS
-    replace_pair_values(y_pred_tensor, [(0,2), (1,2)], 7)
+    # 2) (0<->1) -> 6  SW <-> MSH -> BS
+    replace_pair_values(y_pred_tensor, [(0,1)], 6)
     
-    # 3) (4<->5) -> 8 PS <-> LOBE -> PSBL
-    replace_pair_values(y_pred_tensor, [(4,5)], 8)
+    # 3) (3<->4) -> 7 PS <-> LOBE -> PSBL
+    replace_pair_values(y_pred_tensor, [(3,4)], 7)
 
     
     y_pred_tensor = pd.DataFrame(y_pred_tensor)
     y_pred_tensor = y_pred_tensor.set_index(index)
     
-    figure, axis = plt.subplots(3, 1,  figsize=(20, 10), sharex=True, constrained_layout=True) #sharex=True
+    B = pd.DataFrame(X2_test_avg[:,0])
+    B = B.set_index(index)
+    Ti = pd.DataFrame(X2_test_avg[:,1])
+    Ti = Ti.set_index(index)
+    X = pd.DataFrame(X2_test_avg[:,2])
+    X = X.set_index(index)
+
+    
+    figure, axis = plt.subplots(5, 1,  figsize=(20, 12), sharex=True, constrained_layout=True) #sharex=True
     pcm=axis[0].pcolormesh(np.array(time_string(energy.times)).astype("datetime64[ns]"),energy.y[0],
                                    np.log10(np.transpose(omni_flux.y[:,:])),cmap='nipy_spectral',shading='auto')
     axis[0].set_yscale('log')
+    axis[0].set_ylabel('Ion Spectrogram')
     figure.colorbar(pcm, ax=axis[0], label="$keV/(cm^2~s~sr~keV)$", pad=0)
     # pcm.set_clim(3,6)
     
-    size=14
+    size=18
     plt.rc('font', size=size)          # controls default text sizes
     plt.rc('axes', titlesize=size)     # fontsize of the axes title
     plt.rc('axes', labelsize=size)    # fontsize of the x and y labels
@@ -268,28 +303,34 @@ def predictions_cnn_rf(cnn_model:torch.nn.Module, rf_model, trange):
     plt.rc('legend', fontsize=size+2)    # legend fontsize
     plt.rc('figure', titlesize=size)  # fontsize of the figure title
     
-    
-    axis[1].plot(index, y_pred_tensor, 'ok')
-    axis[1].yaxis.set_ticks(np.arange(0,9,1))
-    axis[1].yaxis.set_ticklabels(['SW', 'FS', 'MSH', 'MSP', 'PS', 'LOBE', 'MP', 'BS', 'PSBL'])
+    axis[1].plot(index, B, 'ok', label='Magnetic Field')
+    axis[1].plot(index, Ti, 'or', label='Temperature')
+    axis[1].plot(index, X, 'ob', label='Position')
     axis[1].grid()
-    axis[1].set_ylabel('Predictions')
-    # axis[1].set_xlabel('time (UTC)')
-
-    axis[2].plot(index, y_rf, 'ob', label='RF')
-    axis[2].plot(index, y_cnn, 'or', label='CNN')
-    axis[2].yaxis.set_ticks(np.arange(0,6,1))
-    axis[2].yaxis.set_ticklabels(['SW', 'FS', 'MSH', 'MSP', 'PS', 'LOBE'])
-    axis[2].grid()
-    axis[2].set_ylabel('RF and CNN Predictions')
-    axis[2].legend()    
-    # axis[3].plot(index, y_cnn, 'or')
-    # axis[3].yaxis.set_ticks(np.arange(0,6,1))
-    # axis[3].yaxis.set_ticklabels(['SW', 'FS', 'MSH', 'MSP', 'PS', 'LOBE'])
-    # axis[3].grid()
-    # axis[3].set_ylabel('CNN Predictions')
+    axis[1].set_ylabel('Parameters')
+    axis[1].legend()    
     
-    plt.savefig("CNN_RF02_Case_"+tname+".png")
+
+    axis[2].plot(index, y_rf, 'oc', label='RF')
+    axis[2].plot(index, y_cnn, 'om', label='CNN')
+    axis[2].yaxis.set_ticks(np.arange(0,5,1))
+    axis[2].yaxis.set_ticklabels(['SW', 'MSH', 'MSP', 'PS', 'LOBE'])
+    axis[2].grid()
+    axis[2].set_ylabel('RF and CNN')
+    axis[2].legend()    
+    
+    axis[3].plot(index, y_combined, 'og', label='Combined model')
+    axis[3].yaxis.set_ticks(np.arange(0,5,1))
+    axis[3].yaxis.set_ticklabels(['SW', 'MSH', 'MSP', 'PS', 'LOBE'])
+    axis[3].grid()
+    axis[3].set_ylabel('Combined')
+    axis[3].legend() 
+    
+    axis[4].plot(index, y_pred_tensor, 'ok', label='Combined model with boundaries')
+    axis[4].yaxis.set_ticks(np.arange(0,8,1))
+    axis[4].yaxis.set_ticklabels(['SW', 'MSH', 'MSP', 'PS', 'LOBE', 'MP', 'BS', 'PSBL'])
+    axis[4].grid()
+    axis[4].set_ylabel('Predictions')
+    axis[4].legend() 
+    
     plt.show()
-
-
