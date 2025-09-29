@@ -4,7 +4,7 @@ This code identifies 5 magnetospheric regions (Solar wind (SW), Magnetosheath (M
 
 The hybrid model uses ion omni flux timeseries and plasma parameters (total magnetic field, total ion temperature, and position in X GSE). The Convolutional Neural Network (CNN) model is trained on ion omni flux timeseries and Random Forest is used for plasma parameters. The final prediction is the mean probabilities from both model.
 
-![Hybrid Model Architecture](https://raw.githubusercontent.com/nargesahmadi/Magnetospheric-Regions/main/architecture.jpg)
+![Hybrid Model Architecture](https://raw.githubusercontent.com/nargesahmadi/Magnetospheric-Regions/blob/main/architecture.jpg)
 
 
 Predictions can be made using Colab_prediction.ipynb file by just giving it the desired time range.  
