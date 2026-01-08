@@ -7,7 +7,9 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import more_itertools
 import xarray as xr
-from pytplot import tplot, del_data, options, get_data, get, store_data, ylim, tplot_options, tlimit
+
+# New version of pyspedas doesn't need pytplot
+from pyspedas import tplot, del_data, options, get_data, get, store_data, ylim, tplot_options, tlimit
 from pyspedas import tinterpol, time_string
 
 
@@ -54,9 +56,9 @@ def predictions_cnn_rf(cnn_model:torch.nn.Module, rf_model, trange):
 
     tname = trange[0].replace('/','_').replace('-','').replace(':','')
     probe = '1'
-    pyspedas.mms.fgm(trange=trange, data_rate='srvy', probe=probe)
-    pyspedas.mms.fpi(trange=trange,center_measurement=True, data_rate='fast',datatype=['dis-moms'], probe=probe)
-    pyspedas.mms.mec(trange=trange, data_rate='srvy', probe=probe)
+    pyspedas.projects.mms.fgm(trange=trange, data_rate='srvy', probe=probe)
+    pyspedas.projects.mms.fpi(trange=trange,center_measurement=True, data_rate='fast',datatype=['dis-moms'], probe=probe)
+    pyspedas.projects.mms.mec(trange=trange, data_rate='srvy', probe=probe)
     
     BgseN ='mms1_fgm_b_gse_srvy_l2'
     DeniN = 'mms1_dis_numberdensity_fast'
