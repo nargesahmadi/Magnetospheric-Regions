@@ -2,7 +2,7 @@ Magnetospheric Region Identifier
 
 This code identifies 5 magnetospheric regions (Solar wind (SW), Magnetosheath (MSH), Inner Magnetosphere (MSP), Plasma sheet (PS) and Lobe (LOBE)) using Magnetospheric MultiScale (MMS) mission data.
 
-The hybrid model uses ion omni flux timeseries and plasma parameters (total magnetic field, total ion temperature, and position in X GSE). The Convolutional Neural Network (CNN) model is trained on ion omni flux timeseries and Random Forest is used for plasma parameters. The final prediction is the mean probabilities from both model.
+The hybrid model uses ion omni flux timeseries and plasma parameters (total magnetic field, ion density, ion velocity in X GSE, total ion temperature, and position in X GSE). The Convolutional Neural Network (CNN) model is trained on ion omni flux timeseries and Random Forest is used for plasma parameters. The final prediction is the mean probabilities from both model.
 
 ![Hybrid Model Architecture](https://github.com/nargesahmadi/Magnetospheric-Regions/blob/main/architecture.jpg)
 
