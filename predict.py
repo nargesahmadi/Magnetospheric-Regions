@@ -13,7 +13,71 @@ from pyspedas import get_data
 from pyspedas import tinterpol, time_string
 
 
-def predictions(model:torch.nn.Module, 
+def normalize_preserve_zero(tensor, min_val=None, max_val=None):
+    """
+    Normalize tensor to [-1, 1] while keeping zero at zero
+    Uses piecewise linear transformation based on min/max values
+
+    Args:
+        tensor: Input tensor
+        min_val: Minimum value (computed if None)
+        max_val: Maximum value (computed if None)
+
+    Returns:
+        normalized tensor, min_val, max_val
+    """
+    if min_val is None:
+        min_val = torch.min(tensor)
+    if max_val is None:
+        max_val = torch.max(tensor)
+
+    # Get the absolute values of min and max for scaling
+    abs_min = torch.abs(min_val)
+    abs_max = torch.abs(max_val)
+
+    # Initialize normalized tensor
+    normalized = torch.zeros_like(tensor)
+
+    # For negative values: map [min_val, 0] to [-1, 0]
+    negative_mask = tensor < 0
+    normalized[negative_mask] = tensor[negative_mask] / abs_min
+
+    # For positive values: map [0, max_val] to [0, 1]
+    positive_mask = tensor >= 0
+    normalized[positive_mask] = tensor[positive_mask] / abs_max
+
+    return normalized
+
+def replace_pair_values(pred_tensor, pair_list, new_value):
+    """
+    Replace values in tensor based on pairs in pair_list
+
+    Args:
+        pred_tensor:
+        pair_list: list of (a,b) pairs to consider (will treat (a,b) and (b,a) the same)
+        new_value: scalar to set on both elements of each matched pair
+
+    Returns:
+        tensor with values replaced
+    """
+    # Build mask for pairs in y[:-1] vs y[1:]
+    a = pred_tensor[:-1]
+    b = pred_tensor[1:]
+    # Start with all False
+    mask_pairs = torch.zeros_like(a, dtype=torch.bool)
+    for p in pair_list:
+        p0, p1 = p
+        mask_pairs |= ((a == p0) & (b == p1)) | ((a == p1) & (b == p0))
+
+    # Expand to full-length mask marking both members of each matched pair
+    mask_full = torch.zeros_like(tensor, dtype=torch.bool)
+    mask_full[:-1] |= mask_pairs
+    mask_full[1:] |= mask_pairs
+
+    pred_tensor[mask_full] = new_value
+    return pred_tensor
+
+def predictions(model:torch.nn.Module,
           trange):
 
     tname = trange[0].replace('/','_').replace('-','').replace(':','')
@@ -280,41 +344,6 @@ def predictions_cnn_rf(cnn_model: torch.nn.Module, rf_model, trange):
     X1_tensor_test = (X1_tensor_test - min_vals_X1) / (max_vals_X1 - min_vals_X1)
     print('x1 shape : ', X1_tensor_test.shape)
 
-    def normalize_preserve_zero(tensor, min_val=None, max_val=None):
-        """
-        Normalize tensor to [-1, 1] while keeping zero at zero
-        Uses piecewise linear transformation based on min/max values
-
-        Args:
-            tensor: Input tensor
-            min_val: Minimum value (computed if None)
-            max_val: Maximum value (computed if None)
-
-        Returns:
-            normalized tensor, min_val, max_val
-        """
-        if min_val is None:
-            min_val = torch.min(tensor)
-        if max_val is None:
-            max_val = torch.max(tensor)
-
-        # Get the absolute values of min and max for scaling
-        abs_min = torch.abs(min_val)
-        abs_max = torch.abs(max_val)
-
-        # Initialize normalized tensor
-        normalized = torch.zeros_like(tensor)
-
-        # For negative values: map [min_val, 0] to [-1, 0]
-        negative_mask = tensor < 0
-        normalized[negative_mask] = tensor[negative_mask] / abs_min
-
-        # For positive values: map [0, max_val] to [0, 1]
-        positive_mask = tensor >= 0
-        normalized[positive_mask] = tensor[positive_mask] / abs_max
-
-        return normalized
-
     print('x2 shape : ', X2_tensor_test.shape)
 
     X2_tensor_test[:, :, 0] = (X2_tensor_test[:, :, 0] - min_vals_X2[0]) / (max_vals_X2[0] - min_vals_X2[0])
@@ -380,28 +409,6 @@ def predictions_cnn_rf(cnn_model: torch.nn.Module, rf_model, trange):
     y_combined = y_pred_tensor
     y_combined = pd.DataFrame(y_combined)
     y_combined = y_combined.set_index(index)
-
-    def replace_pair_values(tensor, pair_list, new_value):
-        """
-        pair_list: list of (a,b) pairs to consider (will treat (a,b) and (b,a) the same)
-        new_value: scalar to set on both elements of each matched pair
-        """
-        # Build mask for pairs in y[:-1] vs y[1:]
-        a = tensor[:-1]
-        b = tensor[1:]
-        # Start with all False
-        mask_pairs = torch.zeros_like(a, dtype=torch.bool)
-        for p in pair_list:
-            p0, p1 = p
-            mask_pairs |= ((a == p0) & (b == p1)) | ((a == p1) & (b == p0))
-
-        # Expand to full-length mask marking both members of each matched pair
-        mask_full = torch.zeros_like(tensor, dtype=torch.bool)
-        mask_full[:-1] |= mask_pairs
-        mask_full[1:] |= mask_pairs
-
-        tensor[mask_full] = new_value
-        return tensor
 
     # Sequentially apply the same groups as your original code:
     # 1) (1<->2) -> 5  MSH <-> MSP  -> MP
